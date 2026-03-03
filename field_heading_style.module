@@ -1,0 +1,456 @@
+<?php
+/**
+ * @file
+ *
+ * Module file - hooks and helpers.
+ */
+
+/**
+ * Implements hook_field_info().
+ */
+function field_heading_style_field_info() {
+  $info = array(
+    'field_heading_style' => array(
+      'label' => t('Heading Style Field'),
+      'description' => t('Enter heading text and select what heading style should be used for it.'),
+      'default_widget' => 'field_heading_style',
+      'default_formatter' => 'field_heading_style',
+    ),
+  );
+  return $info;
+}
+
+/**
+ * Implements hook_field_validate().
+ */
+function field_heading_style_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  foreach ($items as $delta => $item) {
+
+    if (isset($item['heading']['heading_style']) && $item['heading']['heading_style'] != 'no_heading') {
+      $heading_text = $item['heading']['heading_text'] ?? '';
+      if (strlen($heading_text) == 0) {
+        $errors[$field['field_name']][$langcode][$delta][] = array(
+          'error' => 'heading_text_invalid',
+          'message' => t("Please set the heading style to 'No heading' or enter heading text."),
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_field_presave().
+ */
+function field_heading_style_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  foreach ($items as $delta => &$item) {
+    // Flatten the fieldset before saving.
+    $item['heading_style'] = $item['heading']['heading_style'];
+    $item['heading_text'] = $item['heading']['heading_text'];
+  }
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function field_heading_style_field_is_empty($item, $field) {
+  $heading_style = $item['heading']['heading_style'] ?? NULL;
+  $check_heading_style = !is_null($heading_style);
+  $heading_text = $item['heading']['heading_text'] ?? '';
+  $check_heading_text = $heading_style == 'no_heading' ? TRUE : strlen($heading_text) > 0;
+  $result = !$check_heading_style || !$check_heading_text;
+  return $result;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function field_heading_style_field_formatter_info() {
+  $formatters = array(
+    'field_heading_style' => array(
+      'label' => t('Heading Style Field'),
+      'description' => t('Display heading in the selected style.'),
+      'field types' => array('field_heading_style'),
+    ),
+    'field_heading_style_preview' => array(
+      'label' => t('Heading Style Field Preview'),
+      'description' => t('Show heading text and selected style; ideal for Paragraphs Editor Preview displays.'),
+      'field types' => array('field_heading_style'),
+    ),
+  );
+  return $formatters;
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function field_heading_style_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  switch ($display['type']) {
+    case 'field_heading_style':
+      foreach ($items as $delta => $item) {
+        $element[$delta] = array(
+          '#theme' => 'field_heading_style',
+          '#heading_style' => $item['heading_style'],
+          '#heading_text' => $item['heading_text'],
+        );
+      }
+      break;
+    case 'field_heading_style_preview':
+      foreach ($items as $delta => $item) {
+        $heading_style = isset($item['heading_style']) ? $item['heading_style'] : $item['heading']['heading_style'];
+        $heading_text = isset($item['heading_text']) ? $item['heading_text'] : $item['heading']['heading_text'];
+        $element[$delta] = array(
+          '#theme' => 'field_heading_style_preview',
+          '#heading_style' => $heading_style,
+          '#heading_text' => $heading_text,
+        );
+      }
+  }
+
+  return $element;
+
+}
+
+/**
+ * Implements hook_theme().
+ */
+function field_heading_style_theme($existing, $type, $theme, $path) {
+  return array(
+    'field_heading_style' => array(
+      'variables' => array(
+        'heading_style' => NULL,
+        'heading_text' => NULL,
+      ),
+    ),
+    'field_heading_style_preview' => array(
+      'variables' => array(
+        'heading_style' => NULL,
+        'heading_text' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for field heading style.
+ */
+function theme_field_heading_style($variables) {
+  $heading_style = $variables['heading_style'];
+  $heading_text = check_plain($variables['heading_text']);
+
+  if ($heading_style == 'no_heading') {
+    $output = '';
+  }
+  else {
+    $output = '<div id="' . backdrop_html_id($heading_style . '-' . $heading_text)
+      . '" class="field-heading-style ' . backdrop_html_class($heading_style) . '">';
+    if ($heading_style == 'no_style') {
+      $output .= $heading_text;
+    }
+    else {
+      $output .= '<' . $heading_style . '>' . $heading_text . '</' . $heading_style . '>';
+    }
+    $output .= '</div>';
+  }
+  return $output;
+}
+
+/**
+ * Theme function for field heading style.
+ */
+function theme_field_heading_style_preview($variables) {
+  $heading_style = $variables['heading_style'];
+  $heading_text = check_plain($variables['heading_text']);
+
+  $style_labels = array(
+    'no_heading' => t('No heading'),
+    'no_style' => t('No heading style'),
+    'h1' => t('Heading 1'),
+    'h2' => t('Heading 2'),
+    'h3' => t('Heading 3'),
+    'h4' => t('Heading 4'),
+    'h5' => t('Heading 5'),
+    'h6' => t('Heading 6'),
+  );
+
+  $heading_style_label = $style_labels[$heading_style];
+  if ($heading_style == 'no_heading') {
+    $output = $heading_style_label;
+  }
+  else {
+    $output = "$heading_text ($heading_style_label)";
+  }
+  return $output;
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function field_heading_style_field_widget_info() {
+  $info = array(
+    'field_heading_style' => array(
+      'label' => t('Heading Style Field'),
+      'description' => t('Heading field with selectable heading style'),
+      'field types' => array('field_heading_style'),
+      'settings' => array(
+        'available_options' => array('h2', 'h3', 'h4', 'no_heading', 'no_style'),
+      ),
+      'behaviors' => array(
+        'default value' => FIELD_BEHAVIOR_NONE,
+      ),
+    ),
+  );
+  return $info;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for field_ui_field_edit_form.
+ *
+ * Add default help text wherever the field is added.
+ */
+function field_heading_style_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
+  if ($form['#field']['type'] == 'field_heading_style') {
+
+    $existing_description = $form['#instance']['description'];
+    if (empty($existing_description)) {
+      $default_help = t("Heading styles helps to structure pages not just in ways to visibly demarcate sections but also helps with accessibility as screen reading software can use these heading to help the user navigate the page.  For long pages, it can also help us build menus that look at a certain heading level. <em>Heading 1</em> is used for the page title at the top so only the lower levels are needed; there can be several <em>Heading 2</em> each with several <em>Heading 3</em>s nested inside, and each <em>Heading 3</em> can have several <em>Heading 4</em> nested inside.");
+
+      $field_name = $form['#instance']['field_name'];
+      $entity_type = $form['#instance']['entity_type'];
+      $bundle = $form['#instance']['bundle'];
+
+      // If the description has been overridden from the default AND is
+      // consistent then use this.
+      $description = '';
+      $field_instances_entity_type = $form['#field']['bundles'][$entity_type];
+      if (count($field_instances_entity_type) > 1) {
+        // If there is more than 1 instance of this field for this entity type,
+        // check them for a description.
+        foreach ($field_instances_entity_type as $field_bundle) {
+          if ($field_bundle != $bundle) {
+            // Get description from bundle.
+            $config_exists = FALSE;
+            $config_name = "field.instance.$entity_type.$field_bundle.$field_name";
+            $config_description = config_get($config_name, 'description');
+            $config_exists = !empty($config_description);
+            $description_exists = !empty($description);
+            if (!$config_exists) {
+              continue;
+            }
+            else {
+              // Config does exist.
+              if ($description_exists) {
+                // Config exists for current and a previously checked bundle.
+                if ($config_description != $description) {
+                  // If they don't match then the description for this should
+                  // be the default help and we can stop checking.
+                  $description = $default_help;
+                  break;
+                }
+                else {
+                  // They do match so we can carry on checking this entity
+                  // type.
+                  continue;
+                }
+              }
+              else {
+                // Description doesn't exist yet so set with the config
+                // description.
+                $description = $config_description;
+              }
+            }
+          }
+        }
+      }
+      if (empty($description)) {
+        // If we haven't found a configured description yet, check for
+        // instances on other entity types if there are any.
+        $field_instances_entity_types = $form['#field']['bundles'];
+        if (count($field_instances_entity_types) > 1) {
+          // There is one or more other entity type with this field instance
+          // in.
+          foreach ($field_instances_entity_types as $type) {
+            if ($type != $entity_type) {
+              // Get all the bundles in this entity type with this field
+              // instance in.
+              $field_instances_entity_type = $form['#field']['bundles'][$type];
+              foreach ($field_instances_entity_type as $field_bundle) {
+                // Get description from bundle.
+                $config_exists = FALSE;
+                $config_name = "field.instance.$type.$field_bundle.$field_name";
+                $config_description = config_get($config_name, 'description');
+                $config_exists = !empty($config_description);
+                $description_exists = !empty($description);
+                if (!$config_exists) {
+                  continue;
+                }
+                else {
+                  // Config does exist.
+                  if ($description_exists) {
+                    // Config exists for current and a previously checked
+                    // bundle.
+                    if ($config_description != $description) {
+                      // If they don't match then the description for this
+                      // should be the default help and we can stop checking.
+                      $description = $default_help;
+                      break;
+                    }
+                    else {
+                      // They do match so we can carry on checking this entity
+                      // type.
+                      continue;
+                    }
+                  }
+                  else {
+                    // Description doesn't exist yet so set with the config
+                    // description.
+                    $description = $config_description;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      // If a single description or multiple consistent descriptions have been
+      // found in other bundles (either in this entity type or another) use
+      // that; if not, use the default help.
+      $form['instance']['description']['#default_value'] = !empty($description) ? $description : $default_help;
+    }
+  }
+}
+
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function field_heading_style_field_widget_settings_form($field, $instance) {
+  $widget = $instance['widget'];
+
+  $settings = $widget['settings'];
+  if ($widget['type'] == 'field_heading_style') {
+    $form['available_options'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Select which options should be available for this field instance.'),
+      '#options' => array(
+        'no_heading' => t('No heading'),
+        'no_style' => t('No heading style'),
+        'h1' => t('Heading 1'),
+        'h2' => t('Heading 2'),
+        'h3' => t('Heading 3'),
+        'h4' => t('Heading 4'),
+        'h5' => t('Heading 5'),
+        'h6' => t('Heading 6'),
+      ),
+      '#default_value' => $settings['available_options'],
+    );
+    return $form;
+  }
+}
+
+/**
+ * Helper function to get the name of an input element as it will be used in
+ * the HTML form.
+ *
+ * @param array $element
+ *   The element array from a form function.
+ * @param string $form_input_selector
+ *   The selector, including any fieldset for the input. Include square
+ *   brackets.
+ *
+ * @return string
+ *   The full name of the input element
+ */
+function field_heading_style_html_name(array $element, $form_input_selector = '') {
+    $html_name_parts = array();
+  if (!empty($element['#field_parents'])) {
+    $html_name_parts[] = $element['#field_parents'][0];
+    foreach ($element['#field_parents'] as $index => $parent) {
+      if ($index > 0) {
+        $html_name_parts[] = "[$parent]";
+      }
+    }
+    $html_name_parts[] = '[' . $element['#field_name'] . ']';
+  }
+  else {
+    $html_name_parts[] = $element['#field_name'];
+  }
+  $html_name_parts[] = '[' . $element['#language'] . ']';
+  $html_name_parts[] = '[' . $element['#delta'] . ']';
+  $html_name_parts[] = $form_input_selector;
+  $html_name_string = implode('', $html_name_parts);
+  return $html_name_string;
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function field_heading_style_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $element['heading'] = array(
+    '#type' => 'fieldset',
+    '#title' => $instance['label'],
+    '#title_display' => 'before',
+    '#description' => $instance['description'] ?? '',
+  );
+
+  $default_options = array(
+    'no_heading' => t('No heading'),
+    'no_style' => t('No heading style'),
+    'h1' => t('Heading 1'),
+    'h2' => t('Heading 2'),
+    'h3' => t('Heading 3'),
+    'h4' => t('Heading 4'),
+    'h5' => t('Heading 5'),
+    'h6' => t('Heading 6'),
+  );
+  $available_options = $instance['widget']['settings']['available_options'];
+  $options = array();
+  foreach ($available_options as $index => $option) {
+    if ($option <> 0) {
+      $options[$option] = $default_options[$option];
+    }
+  }
+
+  // Retrieve the values according to where the widget form is loaded.
+  if (isset($items[$delta])) {
+    $item = $items[$delta];
+    if (isset($item['heading'])) {
+      // Widget form is loaded via AJAX so is in the nested structure.
+      $heading_style = $item['heading']['heading_style'] ?? NULL;
+      $heading_text = $item['heading']['heading_text'] ?? '';
+    }
+    else {
+      // Widget form is loaded directly so is in the flat structure.
+      $heading_style = $item['heading_style'] ?? NULL;
+      $heading_text = $item['heading_text'] ?? '';
+    }
+  }
+  else {
+    $heading_style = NULL;
+    $heading_text = '';
+  }
+
+  $element['heading']['heading_style'] = array(
+    '#type' => 'select',
+    '#title' => t('Heading Style'),
+    '#default_value' => $heading_style,
+    '#required' => TRUE,
+    '#options' => $options,
+  );
+  $heading_style_html_name = field_heading_style_html_name($element, '[heading][heading_style]');
+  $element['heading']['heading_text'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Heading Text'),
+    '#default_value' => $heading_text,
+    '#size' => 60,
+    '#maxlength' => 255,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="' . $heading_style_html_name .  '"]' => array('!value' => 'no_heading'),
+      ),
+      'required' => array(
+        ':input[name="' . $heading_style_html_name . '"]' => array('!value' => 'no_heading'),
+      ),
+    ),
+  );
+  return $element;
+}

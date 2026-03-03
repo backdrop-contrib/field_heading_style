@@ -1,0 +1,12 @@
+name = Heading Style Field
+description = Heading field with configurable heading style.
+type = module
+backdrop = 1.x
+
+maintainers[yorkshire-pudding] = Martin Price
+
+package = Fields
+tags[] = System Horizons
+tags[] = Paragraphs
+tags[] = Content
+tags[] = Structure
