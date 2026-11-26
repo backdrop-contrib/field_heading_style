@@ -25,13 +25,35 @@ function field_heading_style_field_info() {
  */
 function field_heading_style_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
   foreach ($items as $delta => $item) {
-
+    // Ensure heading text is present if the heading style requires it.
     if (isset($item['heading']['heading_style']) && $item['heading']['heading_style'] != 'no_heading') {
       $heading_text = $item['heading']['heading_text'] ?? '';
       if (strlen($heading_text) == 0) {
         $errors[$field['field_name']][$langcode][$delta][] = array(
           'error' => 'heading_text_invalid',
           'message' => t("Please set the heading style to 'No heading' or enter heading text."),
+        );
+      }
+    }
+
+    // If the field is selected to use an icon, ensure an icon field is
+    // selected.
+    $use_icon = isset($item['heading']['heading_icon']) && $item['heading']['heading_icon'] == 1;
+    if ($use_icon && !isset($item['heading']['heading_icon_field'])) {
+      $errors[$field['field_name']][$langcode][$delta][] = array(
+        'error' => 'heading_icon_field_missing',
+        'message' => t("Please set the heading icon field or disable heading icon."),
+      );
+    }
+
+    // If the field is selected to use an icon, and an icon field is selected,
+    // ensure that icon field has an icon selected.
+    elseif ($use_icon && isset($item['heading']['heading_icon_field'])) {
+      $icon_field = $entity->{$item['heading']['heading_icon_field']}[$entity->langcode];
+      if (empty($icon_field) || empty($icon_field[0]['key'])) {
+        $errors[$field['field_name']][$langcode][$delta][] = array(
+          'error' => 'heading_icon_field_empty',
+          'message' => t("Please set a value in the heading icon field or disable heading icon."),
         );
       }
     }
@@ -46,6 +68,14 @@ function field_heading_style_field_presave($entity_type, $entity, $field, $insta
     // Flatten the fieldset before saving.
     $item['heading_style'] = $item['heading']['heading_style'];
     $item['heading_text'] = $item['heading']['heading_text'];
+    // For icons, ensure a value is set even if the fields are not used.
+    $heading_icon = $item['heading']['heading_icon'] ?? 0;
+    $item['heading_icon'] = $heading_icon;
+    $heading_icon_field = $heading_icon ? $item['heading']['heading_icon_field'] : NULL;
+    $item['heading_icon_field'] = $heading_icon_field;
+    // Retrieve the key value of the selected icon field.
+    $icon_field = $heading_icon && !is_null($heading_icon_field) ? $entity->{$item['heading_icon_field']}[$entity->langcode] : array();
+    $item['heading_icon_key'] = !empty($icon_field) && $heading_icon ? $icon_field[0]['key'] : NULL;
   }
 }
 
@@ -84,14 +114,22 @@ function field_heading_style_field_formatter_info() {
  * Implements hook_field_formatter_view().
  */
 function field_heading_style_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $instance_enable_icon = (bool) $instance['widget']['settings']['enable_icon'];
   $element = array();
   switch ($display['type']) {
     case 'field_heading_style':
       foreach ($items as $delta => $item) {
         $element[$delta] = array(
+          '#attached' => array(
+            'css' => array(
+              backdrop_get_path('module', 'field_heading_style') . '/css/field_heading_style.css',
+            ),
+          ),
           '#theme' => 'field_heading_style',
           '#heading_style' => $item['heading_style'],
           '#heading_text' => $item['heading_text'],
+          '#heading_icon' => $instance_enable_icon ? ($item['heading_icon'] ?? FALSE) : FALSE,
+          '#heading_icon_key' => $instance_enable_icon ? ($item['heading_icon_key'] ?? NULL) : NULL,
         );
       }
       break;
@@ -100,9 +138,16 @@ function field_heading_style_field_formatter_view($entity_type, $entity, $field,
         $heading_style = isset($item['heading_style']) ? $item['heading_style'] : $item['heading']['heading_style'];
         $heading_text = isset($item['heading_text']) ? $item['heading_text'] : $item['heading']['heading_text'];
         $element[$delta] = array(
+          '#attached' => array(
+            'css' => array(
+              backdrop_get_path('module', 'field_heading_style') . '/css/field_heading_style.css',
+            ),
+          ),
           '#theme' => 'field_heading_style_preview',
           '#heading_style' => $heading_style,
           '#heading_text' => $heading_text,
+          '#heading_icon' => $instance_enable_icon ? ($item['heading_icon'] ?? FALSE) : FALSE,
+          '#heading_icon_key' => $instance_enable_icon ? ($item['heading_icon_key'] ?? NULL) : NULL,
         );
       }
   }
@@ -120,12 +165,16 @@ function field_heading_style_theme($existing, $type, $theme, $path) {
       'variables' => array(
         'heading_style' => NULL,
         'heading_text' => NULL,
+        'heading_icon' => FALSE,
+        'heading_icon_key' => NULL,
       ),
     ),
     'field_heading_style_preview' => array(
       'variables' => array(
         'heading_style' => NULL,
         'heading_text' => NULL,
+        'heading_icon' => FALSE,
+        'heading_icon_key' => NULL,
       ),
     ),
   );
@@ -137,6 +186,10 @@ function field_heading_style_theme($existing, $type, $theme, $path) {
 function theme_field_heading_style($variables) {
   $heading_style = $variables['heading_style'];
   $heading_text = check_plain($variables['heading_text']);
+  $heading_icon = (bool) $variables['heading_icon'];
+  if ($heading_icon) {
+    $heading_icon_key = $variables['heading_icon_key'] ?? FALSE;
+  }
 
   if ($heading_style == 'no_heading') {
     $output = '';
@@ -145,10 +198,14 @@ function theme_field_heading_style($variables) {
     $output = '<div id="' . backdrop_html_id($heading_style . '-' . $heading_text)
       . '" class="field-heading-style ' . backdrop_html_class($heading_style) . '">';
     if ($heading_style == 'no_style') {
+      $output .= $heading_icon && $heading_icon_key ? icon($heading_icon_key) : '';
       $output .= $heading_text;
     }
     else {
-      $output .= '<' . $heading_style . '>' . $heading_text . '</' . $heading_style . '>';
+      $output .= '<' . $heading_style . '>';
+      $output .= $heading_icon && $heading_icon_key ? icon($heading_icon_key) : '';
+      $output .= $heading_text;
+      $output .= '</' . $heading_style . '>';
     }
     $output .= '</div>';
   }
@@ -161,6 +218,10 @@ function theme_field_heading_style($variables) {
 function theme_field_heading_style_preview($variables) {
   $heading_style = $variables['heading_style'];
   $heading_text = check_plain($variables['heading_text']);
+  $heading_icon = (bool) $variables['heading_icon'];
+  if ($heading_icon) {
+    $heading_icon_key = $variables['heading_icon_key'] ?? FALSE;
+  }
 
   $style_labels = array(
     'no_heading' => t('No heading'),
@@ -178,7 +239,8 @@ function theme_field_heading_style_preview($variables) {
     $output = $heading_style_label;
   }
   else {
-    $output = "$heading_text ($heading_style_label)";
+    $output = $heading_icon && $heading_icon_key ? icon($heading_icon_key) . ' ' : '';
+    $output .= "$heading_text ($heading_style_label)";
   }
   return $output;
 }
@@ -194,6 +256,7 @@ function field_heading_style_field_widget_info() {
       'field types' => array('field_heading_style'),
       'settings' => array(
         'available_options' => array('h2', 'h3', 'h4', 'no_heading', 'no_style'),
+        'enable_icon' => 0,
       ),
       'behaviors' => array(
         'default value' => FIELD_BEHAVIOR_NONE,
@@ -343,6 +406,11 @@ function field_heading_style_field_widget_settings_form($field, $instance) {
       ),
       '#default_value' => $settings['available_options'],
     );
+    $form['enable_icon'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Enable icons to be set to show before heading text.'),
+      '#default_value' => $settings['enable_icon'],
+    );
     return $form;
   }
 }
@@ -417,18 +485,26 @@ function field_heading_style_field_widget_form(&$form, &$form_state, $field, $in
       // Widget form is loaded via AJAX so is in the nested structure.
       $heading_style = $item['heading']['heading_style'] ?? NULL;
       $heading_text = $item['heading']['heading_text'] ?? '';
+      $heading_icon = $item['heading']['heading_icon'] ?? FALSE;
+      $heading_icon_key = $item['heading']['heading_icon_key'] ?? '';
+      $heading_icon_field = $item['heading']['heading_icon_field'] ?? NULL;
     }
     else {
       // Widget form is loaded directly so is in the flat structure.
       $heading_style = $item['heading_style'] ?? NULL;
       $heading_text = $item['heading_text'] ?? '';
+      $heading_icon = $item['heading_icon'] ?? FALSE;
+      $heading_icon_key = $item['heading_icon_key'] ?? '';
+      $heading_icon_field = $item['heading_icon_field'] ?? NULL;
     }
   }
   else {
     $heading_style = NULL;
     $heading_text = '';
+    $heading_icon = FALSE;
+    $heading_icon_key = '';
+    $heading_icon_field = NULL;
   }
-
   $element['heading']['heading_style'] = array(
     '#type' => 'select',
     '#title' => t('Heading Style'),
@@ -452,5 +528,51 @@ function field_heading_style_field_widget_form(&$form, &$form_state, $field, $in
       ),
     ),
   );
+  if (module_exists('iconfield') && $instance['widget']['settings']['enable_icon']) {
+    // Inspect the entity type and bundle config of the form for any icon
+    // fields.
+    $entity_type = $instance['entity_type'];
+    $bundle = $instance['bundle'];
+    $entity_fields = field_info_instances($entity_type, $bundle);
+    $icon_fields = array();
+    foreach ($entity_fields as $field_name => $field_info) {
+      if ($field_info['widget']['module'] == 'iconfield') {
+        $icon_fields[$field_name] = $field_info['label'];
+      }
+    }
+    if (!empty($icon_fields)) {
+      $element['heading']['heading_icon'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Use icon field in heading'),
+        '#default_value' => $heading_icon,
+        '#states' => array(
+          'visible' => array(
+            ':input[name="' . $heading_style_html_name .  '"]' => array('!value' => 'no_heading'),
+          ),
+        ),
+      );
+      $element['heading']['heading_icon_key'] = array(
+        '#type' => 'hidden',
+        '#default_value' => $heading_icon_key,
+      );
+      if (!is_null($heading_icon_field) && isset($icon_fields[$heading_icon_field])) {
+        $heading_icon_field_default = $heading_icon_field;
+      }
+      elseif (count($icon_fields) == 1) {
+        $heading_icon_field_default = array_key_first($icon_fields);
+      }
+      $heading_icon_html_name = field_heading_style_html_name($element, '[heading][heading_icon]');
+      $element['heading']['heading_icon_field'] = array(
+        '#type' => 'select',
+        '#options' => $icon_fields,
+        '#default_value' => $heading_icon_field_default,
+        '#states' => array(
+          'visible' => array(
+            ':input[name="' . $heading_icon_html_name.  '"]' => array('checked' => TRUE),
+          ),
+        ),
+      );
+    }
+  }
   return $element;
 }

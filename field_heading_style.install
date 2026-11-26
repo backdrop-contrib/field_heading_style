@@ -23,6 +23,24 @@ function field_heading_style_field_schema($field) {
       'length' => 15,
       'not null' => TRUE,
     ),
+    'heading_icon' => array(
+      'description' => 'Boolean indicating whether an icon should be included with the heading.',
+      'type' => 'int',
+      'not null' => TRUE,
+      'default' => 0,
+    ),
+    'heading_icon_key' => array(
+      'description' => 'The icon key.',
+      'type' => 'varchar',
+      'length' => 64,
+      'not null' => FALSE,
+    ),
+    'heading_icon_field' => array(
+      'description' => 'The field containing the icon key.',
+      'type' => 'varchar',
+      'length' => 32,
+      'not null' => FALSE,
+    ),
   );
   $indexes = array(
     'heading_text' => array('heading_text'),
@@ -31,4 +49,38 @@ function field_heading_style_field_schema($field) {
     'columns' => $columns,
     'indexes' => $indexes,
   );
+}
+
+/**
+ * Update the schema for the field storage.
+ */
+function field_heading_style_update_1001() {
+  // List the columns for the table.
+  $columns = array(
+    'heading_icon',
+    'heading_icon_key',
+    'heading_icon_field',
+  );
+
+  // Get the details of all the fields using this module.
+  $fields = field_read_fields(array(
+    'module' => 'field_heading_style',
+  ));
+
+  // Loop through each field, define the table names and add the columns using
+  // the specifaction from hook_schema.
+  foreach ($fields as $field_name => $field) {
+    $tables = array(
+      "field_data_$field_name",
+      "field_revision_$field_name",
+    );
+    foreach ($tables as $table_name) {
+      foreach ($columns as $column) {
+        $column_name = $field_name . '_' . $column;
+        if (!db_field_exists($table_name, $column_name)) {
+          db_add_field($table_name, $column_name, $field['columns'][$column]);
+        }
+      }
+    }
+  }
 }
