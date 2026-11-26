@@ -1,0 +1,30 @@
+/* Default view - Vertically align heading elements within the container */
+.field-heading-style {
+  display: flex;
+  align-items: center;
+  h1, h2, h3, h4, h5, h6 {
+    display: flex;
+    align-items: center;
+  }
+  /* If IconField used for icon, give icon the height of the containing element */
+  svg.icon {
+    height: 1em;
+    margin-right: 0.25em;
+  }
+}
+
+/* Preview view */
+.paragraphs-item-paragraphs-editor-preview .field-type-field-heading-style {
+  /* If IconField used for icon, give icon the height of the containing element */
+  svg.icon {
+    height: 1em;
+    margin-right: 0.25em;
+  }
+}
+
+/* Hide the icon if Tocbot module is used */
+.js-toc-block-wrapper .toc-list-item .toc-link {
+  svg.icon {
+    display: none;
+  }
+}
